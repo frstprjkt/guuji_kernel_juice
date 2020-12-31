@@ -26,7 +26,7 @@ ifeq ($(ld-name),bfd)
 LDFLAGS_vmlinux		+= -shared
 endif
 ifeq ($(ld-name),lld)
-LDFLAGS_vmlinux		+= -pie
+LDFLAGS_vmlinux		+= -pie -z norelro
 endif
 endif
 
