@@ -59,7 +59,6 @@ struct xiaomi_touch_interface {
 	int (*getModeValue)(int Mode, int value_type);
 	int (*getModeAll)(int Mode, int *modevalue);
 	int (*resetMode)(int Mode);
-	int (*getModeCurValue)(int Mode);
 	int (*palm_sensor_read)(void);
 	int (*palm_sensor_write)(int on);
 
@@ -84,7 +83,6 @@ struct xiaomi_touch_pdata{
 	const char *name;
 };
 
-
 struct xiaomi_touch *xiaomi_touch_dev_get(int minor);
 
 extern struct class *get_xiaomi_touch_class(void);
@@ -93,6 +91,6 @@ extern struct device *get_xiaomi_touch_dev(void);
 
 extern int update_palm_sensor_value(int value);
 
-extern int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data);
+int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data);
 
 #endif
