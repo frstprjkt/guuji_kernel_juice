@@ -704,6 +704,12 @@ include/config/auto.conf:
 endif # may-sync-config
 endif # $(dot-config)
 
+ifeq ($(CONFIG_UFS3V0), y)
+KBUILD_CFLAGS += -DUFS3V0
+else
+KBUILD_CFLAGS += -DUFS3V1
+endif
+
 KBUILD_CFLAGS	+= $(call cc-option,-fno-delete-null-pointer-checks,)
 KBUILD_CFLAGS	+= $(call cc-disable-warning,frame-address,)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, format-truncation)
