@@ -146,3 +146,8 @@ Android.bp
 
 # Tech package directories
 #techpack/
+
+out/
+clang/
+AnyKernel3/
+AnyKernel/
