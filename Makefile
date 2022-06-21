@@ -372,9 +372,6 @@ KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 
 # Make variables (CC, etc...)
-AS		= $(CROSS_COMPILE)as
-LD		= $(CROSS_COMPILE)ld
-CC		= $(CROSS_COMPILE)gcc
 CPP		= $(CC) -E
 ifneq ($(LLVM),)
 CC		= clang
@@ -387,10 +384,10 @@ READELF		= llvm-readelf
 OBJSIZE		= llvm-size
 STRIP		= llvm-strip
 else
-REAL_CC		= $(CROSS_COMPILE)gcc
+CC		= $(CROSS_COMPILE)gcc
 LD		= $(CROSS_COMPILE)ld
-AR             ?= $(CROSS_COMPILE)ar
-NM             ?= $(CROSS_COMPILE)nm
+AR		= $(CROSS_COMPILE)ar
+NM		= $(CROSS_COMPILE)nm
 OBJCOPY		= $(CROSS_COMPILE)objcopy
 OBJDUMP		= $(CROSS_COMPILE)objdump
 READELF		= $(CROSS_COMPILE)readelf
@@ -402,7 +399,7 @@ YACC		= bison
 AWK		= awk
 GENKSYMS	= scripts/genksyms/genksyms
 INSTALLKERNEL  := installkernel
-DEPMOD		= depmod
+DEPMOD		= /sbin/depmod
 PERL		= perl
 PYTHON		= python
 PYTHON2		= python2
@@ -441,7 +438,7 @@ KBUILD_CFLAGS   := -Wno-all -Wno-error -Wundef -Wstrict-prototypes -Wno-trigraph
 		   -fno-strict-aliasing -fno-common -fshort-wchar \
 		   -Werror-implicit-function-declaration \
 		   -Werror=return-type -Wno-format-security \
-		   -std=gnu89
+		   -std=gnu89 -fno-stack-protector
 KBUILD_CPPFLAGS := -D__KERNEL__
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
@@ -511,18 +508,16 @@ endif
 ifneq ($(GCC_TOOLCHAIN),)
 CLANG_FLAGS	+= --gcc-toolchain=$(GCC_TOOLCHAIN)
 endif
+ifneq ($(LLVM_IAS),1)
+CLANG_FLAGS	+= -no-integrated-as
+endif
 CLANG_FLAGS	+= $(call cc-option, -Wno-misleading-indentation)
 CLANG_FLAGS	+= $(call cc-option, -Wno-bool-operation)
 CLANG_FLAGS	+= -Werror=unknown-warning-option
 CLANG_FLAGS	+= $(call cc-option, -Wno-unsequenced)
 KBUILD_CFLAGS	+= $(CLANG_FLAGS)
-KBUILD_AFLAGS	+= $(CLANG_FLAGS) -no-integrated-as
+KBUILD_AFLAGS	+= $(CLANG_FLAGS)
 export CLANG_FLAGS
-endif
-
-ifeq ($(ld-name),lld)
-KBUILD_CFLAGS += -fuse-ld=lld
-KBUILD_CPPFLAGS += -Qunused-arguments
 endif
 
 RETPOLINE_CFLAGS_GCC := -mindirect-branch=thunk-extern -mindirect-branch-register
@@ -644,11 +639,12 @@ export LLVM_AR LLVM_NM
 endif
 
 ifdef CONFIG_LTO_GCC
-LTO_CFLAGS	:= -flto -flto=jobserver -fno-fat-lto-objects \
-		   -fuse-linker-plugin -fwhole-program
+LTO_CFLAGS	:= -flto -flto=jobserver -fipa-pta -fno-fat-lto-objects \
+		   -fuse-linker-plugin -fwhole-program -flto-compression-level=3
 KBUILD_CFLAGS	+= $(LTO_CFLAGS) --param=max-inline-insns-auto=1000
 LTO_LDFLAGS	:= $(LTO_CFLAGS) -Wno-lto-type-mismatch -Wno-psabi \
-		   -Wno-stringop-overflow -flinker-output=nolto-rel
+		   -Wno-stringop-overflow -Wno-stringop-overread -flinker-output=nolto-rel \
+                   -Wno-aggressive-loop-optimizations
 LDFINAL		:= $(CONFIG_SHELL) $(srctree)/scripts/gcc-ld $(LTO_LDFLAGS)
 AR		:= $(CROSS_COMPILE)gcc-ar
 NM		:= $(CROSS_COMPILE)gcc-nm
@@ -719,13 +715,6 @@ KBUILD_CFLAGS	+= $(call cc-disable-warning, restrict)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, stringop-overflow)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, stringop-truncation)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, zero-length-bounds)
-KBUILD_CFLAGS   += $(call cc-option, -Wno-format)
-KBUILD_CFLAGS   += $(call cc-option, -Wno-maybe-uninitialized)
-KBUILD_CFLAGS   += $(call cc-option, -Wno-psabi)
-
-ifeq ($(ld-name),lld)
-LDFLAGS += -O3
-endif
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS   += -Os
@@ -736,8 +725,8 @@ endif
 # Tell compiler to tune the performance of the code for a specified
 # target processor
 ifeq ($(cc-name),gcc)
-KBUILD_CFLAGS += -mcpu=cortex-a73.cortex-a53 -mtune=cortex-a73.cortex-a53
-KBUILD_AFLAGS += -mcpu=cortex-a73.cortex-a53 -mtune=cortex-a73.cortex-a53
+KBUILD_CFLAGS += -mcpu=cortex-a73.cortex-a53+crypto -mtune=cortex-a73.cortex-a53
+KBUILD_AFLAGS += -mcpu=cortex-a73.cortex-a53+crypto -mtune=cortex-a73.cortex-a53
 else ifeq ($(cc-name),clang)
 KBUILD_CFLAGS += -mcpu=cortex-a53 -mtune=cortex-a53
 KBUILD_AFLAGS += -mcpu=cortex-a53 -mtune=cortex-a53
@@ -747,7 +736,6 @@ ifeq ($(cc-name),clang)
 ifdef CONFIG_LLVM_POLLY
 KBUILD_CFLAGS	+= -mllvm -polly \
 		   -mllvm -polly-run-inliner \
-		   -mllvm -polly-opt-fusion=max \
 		   -mllvm -polly-ast-use-context \
 		   -mllvm -polly-detect-keep-going \
 		   -mllvm -polly-vectorizer=stripmine \
@@ -790,10 +778,9 @@ KBUILD_CFLAGS += $(stackp-flags-y)
 
 ifeq ($(cc-name),clang)
 ifneq ($(CROSS_COMPILE),)
-CLANG_FLAGS	+= --target=$(notdir $(CROSS_COMPILE:%-=%))
-GCC_TOOLCHAIN_DIR := $(dir $(shell which $(CROSS_COMPILE)elfedit))
-CLANG_FLAGS	+= --prefix=$(GCC_TOOLCHAIN_DIR)$(notdir $(CROSS_COMPILE))
-GCC_TOOLCHAIN	:= $(realpath $(GCC_TOOLCHAIN_DIR)/..)
+CLANG_TRIPLE	?= $(CROSS_COMPILE)
+CLANG_TARGET	:= --target=$(notdir $(CLANG_TRIPLE:%-=%))
+GCC_TOOLCHAIN	:= $(realpath $(dir $(shell which $(LD)))/..)
 endif
 ifneq ($(GCC_TOOLCHAIN),)
 CLANG_GCC_TC	:= --gcc-toolchain=$(GCC_TOOLCHAIN)
@@ -865,6 +852,7 @@ ifneq ($(LLVM_IAS),1)
 KBUILD_AFLAGS	+= -Wa,-gdwarf-2
 endif
 endif
+
 ifdef CONFIG_DEBUG_INFO_DWARF4
 KBUILD_CFLAGS	+= $(call cc-option, -gdwarf-4,)
 endif
@@ -911,8 +899,8 @@ KBUILD_CFLAGS += $(call cc-option, -fno-inline-functions-called-once)
 endif
 
 ifdef CONFIG_LD_DEAD_CODE_DATA_ELIMINATION
-KBUILD_CFLAGS	+= $(call cc-option,-ffunction-sections,)
-KBUILD_CFLAGS	+= $(call cc-option,-fdata-sections,)
+KBUILD_CFLAGS_KERNEL += -ffunction-sections -fdata-sections
+LDFLAGS_vmlinux += --gc-sections
 endif
 
 ifdef CONFIG_LTO_CLANG
@@ -1052,10 +1040,6 @@ KBUILD_CFLAGS   += $(ARCH_CFLAGS)   $(KCFLAGS)
 LDFLAGS_BUILD_ID := $(call ld-option, --build-id)
 KBUILD_LDFLAGS_MODULE += $(LDFLAGS_BUILD_ID)
 LDFLAGS_vmlinux += $(LDFLAGS_BUILD_ID)
-
-ifdef CONFIG_LD_DEAD_CODE_DATA_ELIMINATION
-LDFLAGS_vmlinux	+= $(call ld-option, --gc-sections,)
-endif
 
 ifeq ($(CONFIG_STRIP_ASM_SYMS),y)
 LDFLAGS_vmlinux	+= $(call ld-option, -X,)
