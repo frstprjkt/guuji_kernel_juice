@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __QPNP_REVID
@@ -202,6 +203,9 @@
 
 /* PM8008 SUBTYPE */
 #define PM8008_SUBTYPE	0x2C
+
+/* PM8010 SUBTYPE */
+#define PM8010_SUBTYPE	0x41
 
 /* PMI8998 REV_ID */
 #define PMI8998_V1P0_REV1	0x00
