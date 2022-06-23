@@ -498,6 +498,7 @@
 		*(TEXT_MAIN .text.fixup)				\
 		*(.text.unlikely .text.unlikely.*)			\
 		*(.text.unknown .text.unknown.*)			\
+		*(TEXT_CFI_MAIN) 					\
 		NOINSTR_TEXT						\
 		*(.text..refcount)					\
 		*(.text..ftrace)					\
