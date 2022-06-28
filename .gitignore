@@ -151,3 +151,7 @@ out/
 clang/
 AnyKernel3/
 AnyKernel/
+build.sh
+clangB/
+gcc64/
+error.log
