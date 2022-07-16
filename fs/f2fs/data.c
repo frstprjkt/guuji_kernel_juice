@@ -1076,8 +1076,6 @@ static struct bio *f2fs_grab_read_bio(struct inode *inode, block_t blkaddr,
 
 	f2fs_set_bio_crypt_ctx(bio, inode, first_idx, NULL, GFP_NOFS);
 
-	f2fs_target_device(sbi, blkaddr, bio);
-
 	bio->bi_iter.bi_sector = sector;
 	bio->bi_end_io = f2fs_read_end_io;
 

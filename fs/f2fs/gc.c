@@ -67,10 +67,8 @@ static int gc_thread_func(void *data)
 			break;
 
 		if (sbi->sb->s_writers.frozen >= SB_FREEZE_WRITE) {
-			if (!sbi->rapid_gc) {
-				increase_sleep_time(gc_th, &wait_ms);
-				stat_other_skip_bggc_count(sbi);
-			}
+			increase_sleep_time(gc_th, &wait_ms);
+			stat_other_skip_bggc_count(sbi);
 			continue;
 		}
 
@@ -116,7 +114,6 @@ static int gc_thread_func(void *data)
 			wait_ms = gc_th->urgent_sleep_time;
 			f2fs_down_write(&sbi->gc_lock);
 			gc_control.should_migrate_blocks = true;
->>>>>>> 0e5ad561100b638d8ce2ce54a6623fe637cc8bbb
 			goto do_gc;
 		} else {
 			gc_control.should_migrate_blocks = false;
@@ -160,19 +157,6 @@ do_gc:
 		/* if return value is not zero, no victim was selected */
 		if (f2fs_gc(sbi, &gc_control))
 			wait_ms = gc_th->no_gc_sleep_time;
-			sbi->rapid_gc = false;
-			rapid_gc_set_wakelock();
-			sbi->gc_mode = GC_NORMAL;
-			pr_info("F2FS-fs: No more rapid GC victim found, "
-				"sleeping for %u ms", wait_ms);
-
-			/*
-			 * Rapid GC would have cleaned hundreds of segments
-			 * that would not be read again anytime soon.
-			 */
-			mm_drop_caches(3);
-			pr_info("F2FS-fs: dropped caches");
-		}
 
 		if (foreground)
 			wake_up_all(&gc_th->fggc_wq);
@@ -239,131 +223,6 @@ void f2fs_stop_gc_thread(struct f2fs_sb_info *sbi)
 	wake_up_all(&gc_th->fggc_wq);
 	kfree(gc_th);
 	sbi->gc_thread = NULL;
-}
-
-/* Trigger rapid GC when invalid block is higher than 3% */
-#define RAPID_GC_LIMIT_INVALID_BLOCK 3
-
-static void f2fs_start_rapid_gc(void)
-{
-	struct f2fs_sb_info *sbi;
-	block_t invalid_blocks;
-
-	mutex_lock(&gc_sbi_mutex);
-	list_for_each_entry(sbi, &gc_sbi_list, list) {
-		invalid_blocks = sbi->user_block_count -
-					written_block_count(sbi) -
-					free_user_blocks(sbi);
-		if (invalid_blocks >
-		    ((long)((sbi->user_block_count - written_block_count(sbi)) *
-			RAPID_GC_LIMIT_INVALID_BLOCK) / 100)) {
-			f2fs_start_gc_thread(sbi);
-			sbi->gc_thread->gc_wake = 1;
-			wake_up_interruptible_all(&sbi->gc_thread->gc_wait_queue_head);
-			wake_up_discard_thread(sbi, true);
-		} else {
-			pr_info("F2FS-fs: Invalid blocks lower than %d%%, "
-					"skipping rapid GC (%u / (%u - %u))",
-					RAPID_GC_LIMIT_INVALID_BLOCK,
-					invalid_blocks,
-					sbi->user_block_count,
-					written_block_count(sbi));
-		}
-	}
-	mutex_unlock(&gc_sbi_mutex);
-}
-
-static void f2fs_stop_rapid_gc(void)
-{
-	struct f2fs_sb_info *sbi;
-
-	mutex_lock(&gc_sbi_mutex);
-	list_for_each_entry(sbi, &gc_sbi_list, list) {
-		f2fs_stop_gc_thread(sbi);
-	}
-	mutex_unlock(&gc_sbi_mutex);
-
-	rapid_gc_set_wakelock();
-}
-
-void f2fs_gc_sbi_list_add(struct f2fs_sb_info *sbi)
-{
-	mutex_lock(&gc_sbi_mutex);
-	list_add_tail(&sbi->list, &gc_sbi_list);
-	mutex_unlock(&gc_sbi_mutex);
-}
-
-void f2fs_gc_sbi_list_del(struct f2fs_sb_info *sbi)
-{
-	mutex_lock(&gc_sbi_mutex);
-	list_del(&sbi->list);
-	mutex_unlock(&gc_sbi_mutex);
-}
-
-static struct work_struct rapid_gc_fb_worker;
-static void rapid_gc_fb_work(struct work_struct *work)
-{
-	if (screen_on) {
-		f2fs_stop_rapid_gc();
-	} else {
-		/*
-		 * Start all GC threads exclusively from here
-		 * since the phone screen would turn on when
-		 * a charger is connected
-		 */
-		if (TRIGGER_RAPID_GC)
-			f2fs_start_rapid_gc();
-	}
-}
-
-static int fb_notifier_callback(struct notifier_block *self,
-				unsigned long event, void *data)
-{
-	struct fb_event *evdata = data;
-	int *blank;
-
-	if (event != FB_EVENT_BLANK)
-		goto out;
-
-	if (!evdata || !evdata->data)
-		goto out;
-
-	blank = evdata->data;
-	switch (*blank) {
-	case FB_BLANK_POWERDOWN:
-		if (!screen_on)
-			goto out;
-		screen_on = false;
-		queue_work(system_power_efficient_wq, &rapid_gc_fb_worker);
-		break;
-	case FB_BLANK_UNBLANK:
-		if (screen_on)
-			goto out;
-		screen_on = true;
-		queue_work(system_power_efficient_wq, &rapid_gc_fb_worker);
-		break;
- 	}
- 
-out:
-	return NOTIFY_OK;
-
-}
-
-static struct notifier_block fb_notifier_block = {
-	.notifier_call = fb_notifier_callback,
-};
-
-void __init f2fs_init_rapid_gc(void)
-{
- 	INIT_WORK(&rapid_gc_fb_worker, rapid_gc_fb_work);
- 	gc_wakelock = wakeup_source_register(NULL, "f2fs_rapid_gc_wakelock");
- 	fb_register_client(&fb_notifier_block);
-}
- 
- void __exit f2fs_destroy_rapid_gc(void)
- {
- 	fb_unregister_client(&fb_notifier_block);
-	wakeup_source_unregister(gc_wakelock);
 }
 
 static int select_gc_type(struct f2fs_sb_info *sbi, int gc_type)
@@ -1928,7 +1787,7 @@ int f2fs_gc(struct f2fs_sb_info *sbi, struct f2fs_gc_control *gc_control)
 	cpc.reason = __get_cp_reason(sbi);
 	sbi->skipped_gc_rwsem = 0;
 gc_more:
-	if (unlikely(!(sb->s_flags & SB_ACTIVE))) {
+	if (unlikely(!(sbi->sb->s_flags & SB_ACTIVE))) {
 		ret = -EINVAL;
 		goto stop;
 	}
@@ -2017,7 +1876,7 @@ stop:
 	if (gc_type == FG_GC)
 		f2fs_unpin_all_sections(sbi, true);
 
-	trace_f2fs_gc_end(sb, ret, total_freed, sec_freed,
+	trace_f2fs_gc_end(sbi->sb, ret, total_freed, sec_freed,
 				get_pages(sbi, F2FS_DIRTY_NODES),
 				get_pages(sbi, F2FS_DIRTY_DENTS),
 				get_pages(sbi, F2FS_DIRTY_IMETA),
@@ -2032,13 +1891,6 @@ stop:
 
 	if (gc_control->err_gc_skipped && !ret)
 		ret = sec_freed ? 0 : -EAGAIN;
-
-	if (gc_type == FG_GC && down_read_trylock(&sb->s_umount)) {
-		writeback_inodes_sb(sb, WB_REASON_SYNC);
-		sync_inodes_sb(sb);
-		up_read(&sb->s_umount);
-	}
-
 	return ret;
 }
 

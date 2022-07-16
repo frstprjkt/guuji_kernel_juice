@@ -340,14 +340,9 @@ static int zstd_init_compress_ctx(struct compress_ctx *cc)
 	zstd_cstream *stream;
 	void *workspace;
 	unsigned int workspace_size;
-	unsigned char level = F2FS_I(cc->inode)->i_compress_flag >>
-						COMPRESS_LEVEL_OFFSET;
 
-	if (!level)
-		level = F2FS_ZSTD_DEFAULT_CLEVEL;
-
-	params = ZSTD_getParams(level, cc->rlen, 0);
-	workspace_size = ZSTD_CStreamWorkspaceBound(params.cParams);
+	params = zstd_get_params(F2FS_ZSTD_DEFAULT_CLEVEL, cc->rlen);
+	workspace_size = zstd_cstream_workspace_bound(&params.cParams);
 
 	workspace = f2fs_kvmalloc(F2FS_I_SB(cc->inode),
 					workspace_size, GFP_NOFS);
@@ -426,17 +421,17 @@ static int zstd_init_decompress_ctx(struct decompress_io_ctx *dic)
 	zstd_dstream *stream;
 	void *workspace;
 	unsigned int workspace_size;
-	unsigned int max_window_size =
-			MAX_COMPRESS_WINDOW_SIZE(dic->log_cluster_size);
+	unsigned int max_window_size = MAX_COMPRESS_WINDOW_SIZE(dic->log_cluster_size);
 
-	workspace_size = ZSTD_DStreamWorkspaceBound(max_window_size);
+	workspace_size = zstd_dstream_workspace_bound(max_window_size);
 
 	workspace = f2fs_kvmalloc(F2FS_I_SB(dic->inode),
 					workspace_size, GFP_NOFS);
 	if (!workspace)
 		return -ENOMEM;
 
-	stream = ZSTD_initDStream(max_window_size, workspace, workspace_size);
+	stream = zstd_init_dstream(max_window_size,
+					workspace, workspace_size);
 	if (!stream) {
 		printk_ratelimited("%sF2FS-fs (%s): %s zstd_init_dstream failed\n",
 				KERN_ERR, F2FS_I_SB(dic->inode)->sb->s_id,

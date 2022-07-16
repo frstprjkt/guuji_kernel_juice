@@ -3828,8 +3828,6 @@ void f2fs_destroy_post_read_wq(struct f2fs_sb_info *sbi);
  */
 int f2fs_start_gc_thread(struct f2fs_sb_info *sbi);
 void f2fs_stop_gc_thread(struct f2fs_sb_info *sbi);
-void f2fs_gc_sbi_list_add(struct f2fs_sb_info *sbi);
-void f2fs_gc_sbi_list_del(struct f2fs_sb_info *sbi);
 void __init f2fs_init_rapid_gc(void);
 void __exit f2fs_destroy_rapid_gc(void);
 
